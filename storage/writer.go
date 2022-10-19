@@ -23,6 +23,8 @@ import (
 	"sync"
 	"time"
 	"unicode/utf8"
+	"runtime"
+	"reflect"
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/xerrors"
@@ -183,6 +185,7 @@ func (w *Writer) open() error {
 		}
 		var resp *raw.Object
 		err := applyConds("NewWriter", w.o.gen, w.o.conds, call)
+		var start time.Time
 		if err == nil {
 			if w.o.userProject != "" {
 				call.UserProject(w.o.userProject)
@@ -209,16 +212,19 @@ func (w *Writer) open() error {
 					call.WithRetry(nil, nil)
 				}
 			}
+			start = time.Now()
 			resp, err = call.Do()
 		}
 		if err != nil {
+			end := time.Now()
 			w.mu.Lock()
+			w.err = err
+			fmt.Println("rh_debug: w.ctx", w.ctx, "calltime:", end.Sub(start).String())
 			if w.o.retry != nil {
-				fmt.Println("rh_debug: call.Do(), err:", w.err, "shouldRetry:", w.o.retry.shouldRetry)
+				fmt.Println("rh_debug: call.Do(), err:", w.err, "shouldRetry:", w.o.retry.shouldRetry, "=", getFunctionName(w.o.retry.shouldRetry))
 			} else {
 				fmt.Println("rh_debug: call.Do(), err:", w.err, "retry:", w.o.retry)
 			}
-			w.err = err
 			w.mu.Unlock()
 			pr.CloseWithError(err)
 			return
@@ -226,6 +232,10 @@ func (w *Writer) open() error {
 		w.obj = newObject(resp)
 	}()
 	return nil
+}
+
+func getFunctionName(i interface{}) string {
+	return runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
 }
 
 // Write appends to w. It implements the io.Writer interface.
@@ -248,15 +258,18 @@ func (w *Writer) Write(p []byte) (n int, err error) {
 		// gRPC client has been initialized - use gRPC to upload.
 		if w.o.c.gc != nil {
 			if err := w.openGRPC(); err != nil {
+				fmt.Println("rh_debug: openGRPC() err:", err)
 				return 0, err
 			}
 		} else if err := w.open(); err != nil {
+			fmt.Println("rh_debug: open() err:", err)
 			return 0, err
 		}
 	}
 	n, err = w.pw.Write(p)
 	if err != nil {
 		w.mu.Lock()
+		fmt.Println("rh_debug: pw.Write() err:", w.err)
 		werr := w.err
 		w.mu.Unlock()
 		// Preserve existing functionality that when context is canceled, Write will return
@@ -693,4 +706,3 @@ func checkCanceled(err error) error {
 
 	return err
 }
-
