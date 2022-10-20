@@ -186,6 +186,7 @@ func (w *Writer) open() error {
 		var resp *raw.Object
 		err := applyConds("NewWriter", w.o.gen, w.o.conds, call)
 		var start time.Time
+		var isIdempotent bool
 		if err == nil {
 			if w.o.userProject != "" {
 				call.UserProject(w.o.userProject)
@@ -198,7 +199,7 @@ func (w *Writer) open() error {
 			// there is no need to add retries here.
 
 			// Retry only when the operation is idempotent or the retry policy is RetryAlways.
-			isIdempotent := w.o.conds != nil && (w.o.conds.GenerationMatch >= 0 || w.o.conds.DoesNotExist == true)
+			isIdempotent = w.o.conds != nil && (w.o.conds.GenerationMatch >= 0 || w.o.conds.DoesNotExist == true)
 			var useRetry bool
 			if (w.o.retry == nil || w.o.retry.policy == RetryIdempotent) && isIdempotent {
 				useRetry = true
@@ -221,7 +222,7 @@ func (w *Writer) open() error {
 			w.err = err
 			fmt.Println("rh_debug: w.ctx", w.ctx, "calltime:", end.Sub(start).String())
 			if w.o.retry != nil {
-				fmt.Println("rh_debug: call.Do(), err:", w.err, "shouldRetry:", w.o.retry.shouldRetry, "=", getFunctionName(w.o.retry.shouldRetry))
+				fmt.Println("rh_debug: call.Do(), err:", w.err, "shouldRetry:", w.o.retry.shouldRetry, "=", getFunctionName(w.o.retry.shouldRetry), "isIdem=", isIdempotent, "policy=", w.o.retry.policy)
 			} else {
 				fmt.Println("rh_debug: call.Do(), err:", w.err, "retry:", w.o.retry)
 			}
