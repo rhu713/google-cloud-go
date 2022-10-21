@@ -127,6 +127,8 @@ type Writer struct {
 	//
 	// This is an experimental API and not intended for public use.
 	upid string
+
+	logf func(format string, args ...interface{})
 }
 
 func (w *Writer) open() error {
@@ -220,11 +222,11 @@ func (w *Writer) open() error {
 			end := time.Now()
 			w.mu.Lock()
 			w.err = err
-			fmt.Println("rh_debug: w.ctx", w.ctx, "calltime:", end.Sub(start).String())
+			w.logf("rh_debug: w.ctx=nil? %t calltime: %s", w.ctx, end.Sub(start).String())
 			if w.o.retry != nil {
-				fmt.Println("rh_debug: call.Do(), err:", w.err, "shouldRetry:", w.o.retry.shouldRetry, "=", getFunctionName(w.o.retry.shouldRetry), "isIdem=", isIdempotent, "policy=", w.o.retry.policy)
+				w.logf("rh_debug: call.Do(), err: %v shouldRetry: %v retryFn: %s isIdem: %v policy: %v", w.err, w.o.retry.shouldRetry, getFunctionName(w.o.retry.shouldRetry), isIdempotent, w.o.retry.policy)
 			} else {
-				fmt.Println("rh_debug: call.Do(), err:", w.err, "retry:", w.o.retry)
+				w.logf("rh_debug: call.Do(), err: %v retry: %v", w.err, w.o.retry)
 			}
 			w.mu.Unlock()
 			pr.CloseWithError(err)
@@ -259,18 +261,17 @@ func (w *Writer) Write(p []byte) (n int, err error) {
 		// gRPC client has been initialized - use gRPC to upload.
 		if w.o.c.gc != nil {
 			if err := w.openGRPC(); err != nil {
-				fmt.Println("rh_debug: openGRPC() err:", err)
 				return 0, err
 			}
 		} else if err := w.open(); err != nil {
-			fmt.Println("rh_debug: open() err:", err)
+			w.logf("rh_debug: open() err: %v", err)
 			return 0, err
 		}
 	}
 	n, err = w.pw.Write(p)
 	if err != nil {
 		w.mu.Lock()
-		fmt.Println("rh_debug: pw.Write() err:", w.err)
+		w.logf("rh_debug: pw.Write() err: %v", w.err)
 		werr := w.err
 		w.mu.Unlock()
 		// Preserve existing functionality that when context is canceled, Write will return

@@ -1146,13 +1146,14 @@ func (o *ObjectHandle) ReadCompressed(compressed bool) *ObjectHandle {
 //
 // It is the caller's responsibility to call Close when writing is done. To
 // stop writing without saving the data, cancel the context.
-func (o *ObjectHandle) NewWriter(ctx context.Context) *Writer {
+func (o *ObjectHandle) NewWriter(ctx context.Context, logf func(format string, args ...interface{})) *Writer {
 	return &Writer{
 		ctx:         ctx,
 		o:           o,
 		donec:       make(chan struct{}),
 		ObjectAttrs: ObjectAttrs{Name: o.object},
 		ChunkSize:   googleapi.DefaultUploadChunkSize,
+		logf:				 logf,
 	}
 }
 
