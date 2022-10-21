@@ -189,6 +189,7 @@ func (w *Writer) open() error {
 		err := applyConds("NewWriter", w.o.gen, w.o.conds, call)
 		var start time.Time
 		var isIdempotent bool
+		var useRetry bool
 		if err == nil {
 			if w.o.userProject != "" {
 				call.UserProject(w.o.userProject)
@@ -202,7 +203,6 @@ func (w *Writer) open() error {
 
 			// Retry only when the operation is idempotent or the retry policy is RetryAlways.
 			isIdempotent = w.o.conds != nil && (w.o.conds.GenerationMatch >= 0 || w.o.conds.DoesNotExist == true)
-			var useRetry bool
 			if (w.o.retry == nil || w.o.retry.policy == RetryIdempotent) && isIdempotent {
 				useRetry = true
 			} else if w.o.retry != nil && w.o.retry.policy == RetryAlways {
@@ -214,6 +214,8 @@ func (w *Writer) open() error {
 				} else {
 					call.WithRetry(nil, nil)
 				}
+			} else {
+				w.logf("not retrying policy=%v retryFn=%v", w.o.retry.policy, w.o.retry)
 			}
 			start = time.Now()
 			resp, err = call.Do()
@@ -224,7 +226,7 @@ func (w *Writer) open() error {
 			w.err = err
 			w.logf("rh_debug: w.ctx=nil? %t calltime: %s", w.ctx, end.Sub(start).String())
 			if w.o.retry != nil {
-				w.logf("rh_debug: call.Do(), err: %v shouldRetry: %v retryFn: %s isIdem: %v policy: %v", w.err, w.o.retry.shouldRetry, getFunctionName(w.o.retry.shouldRetry), isIdempotent, w.o.retry.policy)
+				w.logf("rh_debug: call.Do(), err: %v shouldRetry: %v retryFn: %s isIdem: %v policy: %v useRetry:%v", w.err, w.o.retry.shouldRetry, getFunctionName(w.o.retry.shouldRetry), isIdempotent, w.o.retry.policy, useRetry)
 			} else {
 				w.logf("rh_debug: call.Do(), err: %v retry: %v", w.err, w.o.retry)
 			}
