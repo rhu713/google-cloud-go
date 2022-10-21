@@ -189,6 +189,7 @@ func (w *Writer) open() error {
 		err := applyConds("NewWriter", w.o.gen, w.o.conds, call)
 		var start time.Time
 		var isIdempotent bool
+		var useRetry bool
 		if err == nil {
 			if w.o.userProject != "" {
 				call.UserProject(w.o.userProject)
@@ -202,7 +203,6 @@ func (w *Writer) open() error {
 
 			// Retry only when the operation is idempotent or the retry policy is RetryAlways.
 			isIdempotent = w.o.conds != nil && (w.o.conds.GenerationMatch >= 0 || w.o.conds.DoesNotExist == true)
-			var useRetry bool
 			if (w.o.retry == nil || w.o.retry.policy == RetryIdempotent) && isIdempotent {
 				useRetry = true
 			} else if w.o.retry != nil && w.o.retry.policy == RetryAlways {
@@ -231,6 +231,12 @@ func (w *Writer) open() error {
 			w.mu.Unlock()
 			pr.CloseWithError(err)
 			return
+		} else {
+			if useRetry {
+				w.logf("rh_debug: useRetry %s call.Do(), err: %v shouldRetry: %v retryFn: %s isIdem: %v policy: %v", w.Name, w.err, w.o.retry.shouldRetry, getFunctionName(w.o.retry.shouldRetry), isIdempotent, w.o.retry.policy)
+			} else {
+				w.logf("rh_debug: noRetry %s, call.Do(), err: %v retry: %v", w.Name, w.err, w.o.retry)
+			}
 		}
 		w.obj = newObject(resp)
 	}()
