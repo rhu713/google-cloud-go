@@ -20,11 +20,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
+	"runtime"
 	"sync"
 	"time"
 	"unicode/utf8"
-	"runtime"
-	"reflect"
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/xerrors"
@@ -163,7 +163,7 @@ func (w *Writer) open() error {
 		if w.MD5 != nil {
 			rawObj.Md5Hash = base64.StdEncoding.EncodeToString(w.MD5)
 		}
-		call := w.o.c.raw.Objects.Insert(w.o.bucket, rawObj).
+		call := w.o.c.raw.Objects.InsertWithLogger(w.o.bucket, rawObj, w.logf).
 			Media(pr, mediaOpts...).
 			Projection("full").
 			Context(w.ctx).
